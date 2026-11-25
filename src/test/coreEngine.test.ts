@@ -36,7 +36,8 @@ describe('Smart Order Builder - Core Engine (TC-01 through TC-11)', () => {
       fried: 2,
       sausage: 1,
       bacon: 1,
-      hashbrown: 2,
+      hashbrown: 1,
+      mushroom: 1,
       hollandaise: 1,
     },
     quantity: 1,
@@ -335,7 +336,8 @@ describe('Smart Order Builder - Core Engine (TC-01 through TC-11)', () => {
         fried: 3,
         sausage: 1,
         bacon: 1,
-        hashbrown: 2,
+        hashbrown: 1,
+        mushroom: 1,
         hollandaise: 1,
       },
       quantity: 1,
@@ -381,7 +383,8 @@ describe('Smart Order Builder - Core Engine (TC-01 through TC-11)', () => {
     const emptyConfig: ItemConfig = { selections: {}, quantity: 1 };
     expect(calculateMaxAddableNow('fried', emptyConfig, menu.groups, remaining)).toBe(1);
     expect(calculateMaxAddableNow('omelette', emptyConfig, menu.groups, remaining)).toBe(0);
-    expect(calculateMaxAddableNow('toast', emptyConfig, menu.groups, remaining)).toBe(Infinity);
+    expect(calculateMaxAddableNow('toast', emptyConfig, menu.groups, remaining)).toBe(20);
+    expect(calculateMaxAddableNow('ketchup', emptyConfig, menu.groups, remaining)).toBe(Infinity);
   });
 
   // -------------------------------------------------------------

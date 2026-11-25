@@ -9,9 +9,9 @@
       "min": 1,
       "max": 1,
       "options": [
-        { "id": "toast", "name": "Toast", "pricePoisha": 0, "ingredients": {} },
+        { "id": "toast", "name": "Toast", "pricePoisha": 0, "ingredients": { "toast": 1 } },
         { "id": "paratha", "name": "Paratha", "pricePoisha": 2000, "ingredients": { "paratha": 1 } },
-        { "id": "croissant", "name": "Croissant", "pricePoisha": 5000, "ingredients": { "croissant": 1 } }
+        { "id": "croissant", "name": "Croissant", "pricePoisha": 6000, "ingredients": { "croissant": 1 } }
       ]
     },
     {
