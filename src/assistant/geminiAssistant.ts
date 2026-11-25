@@ -13,6 +13,95 @@ import type { MenuFixture, StoredOrder } from '../types/order';
 
 const menu = appendixMenu as MenuFixture;
 
+export const FALLBACK_MODELS = [
+  'gemini-3.8-flash',
+  'gemini-3.8-flash-lite',
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+];
+
+export const PRIMARY_MODEL = FALLBACK_MODELS[0];
+export const FALLBACK_MODEL = FALLBACK_MODELS[3];
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export interface ParsedErrorInfo {
+  status?: number;
+  message: string;
+  rawText: string;
+}
+
+export function parseErrorInfo(err: any): ParsedErrorInfo {
+  const rawText = String(err?.message || err || '');
+  let status: number | undefined = err?.status || err?.statusCode;
+  let message = rawText;
+
+  // Extract clean message and code from embedded JSON if present
+  try {
+    const jsonMatch = rawText.match(/\{[\s\S]*"error"[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (parsed?.error) {
+        if (!status && typeof parsed.error.code === 'number') {
+          status = parsed.error.code;
+        }
+        if (parsed.error.message && typeof parsed.error.message === 'string') {
+          message = parsed.error.message;
+        }
+      }
+    }
+  } catch {
+    // Ignore JSON parsing errors
+  }
+
+  // Extract status code from patterns like [503 Service Unavailable] or [429]
+  if (!status) {
+    const statusMatch = rawText.match(/\[(\d{3})\b/);
+    if (statusMatch) {
+      status = parseInt(statusMatch[1], 10);
+    }
+  }
+
+  // Clean GoogleGenerativeAI Error prefix if present
+  message = message.replace(/^\[GoogleGenerativeAI Error\]:\s*/i, '').trim();
+
+  return { status, message, rawText };
+}
+
+function isAuthError(info: ParsedErrorInfo): boolean {
+  const combined = (info.rawText + ' ' + info.message).toLowerCase();
+  return (
+    info.status === 400 ||
+    info.status === 401 ||
+    info.status === 403 ||
+    combined.includes('api_key_invalid') ||
+    combined.includes('api key not valid') ||
+    combined.includes('invalid api key') ||
+    combined.includes('permission_denied')
+  );
+}
+
+function isRetryableError(info: ParsedErrorInfo): boolean {
+  const combined = (info.rawText + ' ' + info.message).toLowerCase();
+  return (
+    info.status === 503 ||
+    info.status === 429 ||
+    info.status === 404 ||
+    combined.includes('503') ||
+    combined.includes('unavailable') ||
+    combined.includes('high demand') ||
+    combined.includes('overloaded') ||
+    combined.includes('429') ||
+    combined.includes('rate limit') ||
+    combined.includes('quota') ||
+    combined.includes('resource_exhausted') ||
+    combined.includes('404') ||
+    combined.includes('not found') ||
+    combined.includes('no longer available')
+  );
+}
+
 export interface AssistantResponse {
   ok: boolean;
   text: string;
@@ -149,77 +238,139 @@ export async function askSalesAssistant(
 
   try {
     const ai = new GoogleGenAI({ apiKey });
-    const executedToolCalls: Array<{ name: string; args: Record<string, any>; result: any }> = [];
+    let lastError: any = null;
 
-    // First model turn with function calling enabled
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [{ role: 'user', parts: [{ text: question }] }],
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        tools: toolDeclarations as any,
-      },
-    });
+    // Iterate through models sequentially with fallback
+    for (let modelIndex = 0; modelIndex < FALLBACK_MODELS.length; modelIndex++) {
+      const currentModel = FALLBACK_MODELS[modelIndex];
+      const executedToolCalls: Array<{ name: string; args: Record<string, any>; result: any }> = [];
 
-    const candidate = response.candidates?.[0];
-    const functionCalls = candidate?.content?.parts?.filter(
-      (part: any) => part.functionCall
-    );
+      try {
+        // First model turn with function calling
+        const response = await ai.models.generateContent({
+          model: currentModel,
+          contents: [{ role: 'user', parts: [{ text: question }] }],
+          config: {
+            systemInstruction: SYSTEM_INSTRUCTION,
+            tools: toolDeclarations as any,
+          },
+        });
 
-    // If no tool was called, return the direct text response
-    if (!functionCalls || functionCalls.length === 0) {
+        const candidate = response.candidates?.[0];
+        const functionCalls = candidate?.content?.parts?.filter(
+          (part: any) => part.functionCall
+        );
+
+        // If no tool was called, return the direct text response
+        if (!functionCalls || functionCalls.length === 0) {
+          return {
+            ok: true,
+            text: response.text || 'No response generated.',
+            toolCallsExecuted: executedToolCalls,
+          };
+        }
+
+        // Execute all tool calls against live orders
+        const toolResponseParts = functionCalls.map((part: any) => {
+          const call = part.functionCall;
+          const result = executeTool(call.name, call.args || {}, liveOrders);
+          executedToolCalls.push({
+            name: call.name,
+            args: call.args || {},
+            result,
+          });
+
+          return {
+            functionResponse: {
+              name: call.name,
+              response: result,
+            },
+          };
+        });
+
+        // Second model turn providing tool responses back with retry/fallback
+        let secondTurnResponse: any = null;
+        for (let turn2Index = modelIndex; turn2Index < FALLBACK_MODELS.length; turn2Index++) {
+          const turn2Model = FALLBACK_MODELS[turn2Index];
+          try {
+            secondTurnResponse = await ai.models.generateContent({
+              model: turn2Model,
+              contents: [
+                { role: 'user', parts: [{ text: question }] },
+                candidate!.content!,
+                { role: 'user', parts: toolResponseParts },
+              ],
+              config: {
+                systemInstruction: SYSTEM_INSTRUCTION,
+              },
+            });
+            break;
+          } catch (turn2Err: any) {
+            const turn2Info = parseErrorInfo(turn2Err);
+            if (isAuthError(turn2Info)) {
+              throw turn2Err;
+            }
+            if (isRetryableError(turn2Info) && turn2Index < FALLBACK_MODELS.length - 1) {
+              await sleep(400);
+              continue;
+            }
+            throw turn2Err;
+          }
+        }
+
+        return {
+          ok: true,
+          text: secondTurnResponse?.text || 'Answer generated based on sales data.',
+          toolCallsExecuted: executedToolCalls,
+        };
+      } catch (err: any) {
+        lastError = err;
+        const errInfo = parseErrorInfo(err);
+
+        // Fail immediately on invalid API key without wasting retries
+        if (isAuthError(errInfo)) {
+          return {
+            ok: false,
+            text: '',
+            errorType: 'INVALID_API_KEY',
+            message: 'Invalid Gemini API key. Please check your VITE_GEMINI_API_KEY configuration.',
+          };
+        }
+
+        // Fall back to next model on transient/availability errors after 400ms
+        if (isRetryableError(errInfo) && modelIndex < FALLBACK_MODELS.length - 1) {
+          await sleep(400);
+          continue;
+        }
+
+        break;
+      }
+    }
+
+    // If all models failed, format a clean user-facing error message
+    const finalInfo = parseErrorInfo(lastError);
+    const combined = (finalInfo.rawText + ' ' + finalInfo.message).toLowerCase();
+
+    if (
+      finalInfo.status === 503 ||
+      combined.includes('503') ||
+      combined.includes('unavailable') ||
+      combined.includes('overloaded') ||
+      combined.includes('high demand')
+    ) {
       return {
-        ok: true,
-        text: response.text || 'No response generated.',
-        toolCallsExecuted: executedToolCalls,
+        ok: false,
+        text: '',
+        errorType: 'NETWORK_ERROR',
+        message: 'Gemini models are temporarily busy (503). Please try again in a few seconds.',
       };
     }
 
-    // Execute all tool calls against live orders
-    const toolResponseParts = functionCalls.map((part: any) => {
-      const call = part.functionCall;
-      const result = executeTool(call.name, call.args || {}, liveOrders);
-      executedToolCalls.push({
-        name: call.name,
-        args: call.args || {},
-        result,
-      });
-
-      return {
-        functionResponse: {
-          name: call.name,
-          response: result,
-        },
-      };
-    });
-
-    // Second model turn providing tool responses back
-    const secondTurnResponse = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [
-        { role: 'user', parts: [{ text: question }] },
-        candidate!.content!,
-        { role: 'user', parts: toolResponseParts },
-      ],
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-      },
-    });
-
-    return {
-      ok: true,
-      text: secondTurnResponse.text || 'Answer generated based on sales data.',
-      toolCallsExecuted: executedToolCalls,
-    };
-  } catch (err: any) {
-    const msg = String(err?.message || err || '');
-    const status = err?.status || err?.statusCode;
-
     if (
-      status === 429 ||
-      msg.includes('429') ||
-      msg.toLowerCase().includes('quota') ||
-      msg.includes('RESOURCE_EXHAUSTED')
+      finalInfo.status === 429 ||
+      combined.includes('429') ||
+      combined.includes('quota') ||
+      combined.includes('resource_exhausted')
     ) {
       return {
         ok: false,
@@ -230,16 +381,16 @@ export async function askSalesAssistant(
     }
 
     if (
-      status === 400 ||
-      status === 401 ||
-      status === 403 ||
-      msg.toLowerCase().includes('api key')
+      finalInfo.status === 404 ||
+      combined.includes('404') ||
+      combined.includes('not found') ||
+      combined.includes('no longer available')
     ) {
       return {
         ok: false,
         text: '',
-        errorType: 'INVALID_API_KEY',
-        message: 'Invalid Gemini API key. Please check your VITE_GEMINI_API_KEY configuration.',
+        errorType: 'NETWORK_ERROR',
+        message: 'The requested Gemini models are currently not available. Please try again shortly.',
       };
     }
 
@@ -247,7 +398,15 @@ export async function askSalesAssistant(
       ok: false,
       text: '',
       errorType: 'NETWORK_ERROR',
-      message: `Failed to communicate with Gemini assistant: ${msg}`,
+      message: `Failed to communicate with Gemini assistant: ${finalInfo.message || finalInfo.rawText}`,
+    };
+  } catch (err: any) {
+    const info = parseErrorInfo(err);
+    return {
+      ok: false,
+      text: '',
+      errorType: 'NETWORK_ERROR',
+      message: `Failed to communicate with Gemini assistant: ${info.message || info.rawText}`,
     };
   }
 }

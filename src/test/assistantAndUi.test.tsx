@@ -5,6 +5,10 @@ import {
   askSalesAssistant,
   executeTool,
   setAssistantRunner,
+  PRIMARY_MODEL,
+  FALLBACK_MODEL,
+  FALLBACK_MODELS,
+  parseErrorInfo,
 } from '../assistant/geminiAssistant';
 import {
   getAverageOrderValue,
@@ -259,5 +263,24 @@ describe('Smart Order Builder - Phase 3 (TC-18 through TC-20 & Q1-Q8)', () => {
     const netRes = await askSalesAssistant('Total revenue?', seedOrders);
     expect(netRes.ok).toBe(false);
     expect(netRes.errorType).toBe('NETWORK_ERROR');
+  });
+
+  it('Configures resilient multi-model fallback list with primary gemini-3.8-flash', () => {
+    expect(FALLBACK_MODELS).toEqual([
+      'gemini-3.8-flash',
+      'gemini-3.8-flash-lite',
+      'gemini-2.5-flash-lite',
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+    ]);
+    expect(PRIMARY_MODEL).toBe('gemini-3.8-flash');
+    expect(FALLBACK_MODEL).toBe('gemini-2.5-flash');
+
+    // Verifies JSON error extraction
+    const parsed = parseErrorInfo({
+      message: '[GoogleGenerativeAI Error]: [503] {"error":{"code":503,"message":"The model is overloaded. Please try again later."}}',
+    });
+    expect(parsed.status).toBe(503);
+    expect(parsed.message).toBe('The model is overloaded. Please try again later.');
   });
 });

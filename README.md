@@ -21,7 +21,7 @@ Built with **React 19**, **TypeScript** (strict mode), **Vite**, **Tailwind CSS*
 ```
 src/
 ├── assistant/
-│   └── geminiAssistant.ts      # Gemini 2.5 Flash function-calling sales assistant (Part F)
+│   └── geminiAssistant.ts      # Gemini 3.8 Flash function-calling sales assistant (Part F) with 2.5 fallback
 ├── components/
 │   ├── BuilderView.tsx         # 100% data-driven option builder with live validation & preview
 │   ├── CartPanel.tsx           # Server-synced countdown timer, net-diff editing & checkout
@@ -77,7 +77,7 @@ src/
   6. 5% VAT and whole-BDT payable rounding.
 
 ### 4. Sales Assistant & Stats Engine (`geminiAssistant.ts`, `statsEngine.ts`)
-- Integrates Google Gen AI SDK (`@google/genai`) with model `gemini-2.5-flash`.
+- Integrates Google Gen AI SDK (`@google/genai`) with primary model `gemini-3.8-flash` (and automatic fallback to `gemini-2.5-flash` on 404 model-not-found).
 - Uses 7 function declarations matching Checkpoint C2:
   - `getOrderCount`
   - `getTotalRevenue`
