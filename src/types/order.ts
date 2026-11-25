@@ -93,6 +93,34 @@ export interface CartLine {
   quantity?: number;
   unitPricePoisha?: number;
   lineTotalPoisha?: number;
+  reservationId?: string;
+  expired?: boolean;
+  expiresAtIso?: string;
+}
+
+export interface ReservationResult {
+  ok: boolean;
+  line?: CartLine;
+  reservation?: Reservation;
+  shortages?: IngredientShortage[];
+  message?: string;
+  deduplicated?: boolean;
+  expired?: boolean;
+}
+
+export interface CheckoutResult {
+  ok: boolean;
+  order?: StoredOrder;
+  message?: string;
+  deduplicated?: boolean;
+  expired?: boolean;
+}
+
+export interface StoreState {
+  cart: CartLine[];
+  reservations: Reservation[];
+  remainingStock: Record<string, number>;
+  serverTime: string;
 }
 
 export interface PricingBreakdown {
