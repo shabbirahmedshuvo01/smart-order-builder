@@ -218,7 +218,8 @@ export const BuilderView: React.FC<BuilderViewProps> = ({
                 <h3 className="font-semibold text-slate-800">
                   {group.name}{' '}
                   <span className="text-xs font-normal text-slate-500">
-                    (Min: {group.min}, Max: {group.max}
+                    (Min: {group.min}
+                    {typeof group.max === 'number' ? `, Max: ${group.max}` : ''}
                     {group.step ? `, Step: ${group.step}` : ''}
                     {group.maxDistinct ? `, Max distinct: ${group.maxDistinct}` : ''})
                   </span>
