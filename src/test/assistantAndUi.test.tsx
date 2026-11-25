@@ -265,16 +265,13 @@ describe('Smart Order Builder - Phase 3 (TC-18 through TC-20 & Q1-Q8)', () => {
     expect(netRes.errorType).toBe('NETWORK_ERROR');
   });
 
-  it('Configures resilient multi-model fallback list with primary gemini-3.8-flash', () => {
+  it('Configures resilient multi-model fallback list with primary gemini-2.5-flash and gemini-2.0-flash fallback', () => {
     expect(FALLBACK_MODELS).toEqual([
-      'gemini-3.8-flash',
-      'gemini-3.8-flash-lite',
-      'gemini-2.5-flash-lite',
       'gemini-2.5-flash',
       'gemini-2.0-flash',
     ]);
-    expect(PRIMARY_MODEL).toBe('gemini-3.8-flash');
-    expect(FALLBACK_MODEL).toBe('gemini-2.5-flash');
+    expect(PRIMARY_MODEL).toBe('gemini-2.5-flash');
+    expect(FALLBACK_MODEL).toBe('gemini-2.0-flash');
 
     // Verifies JSON error extraction
     const parsed = parseErrorInfo({
