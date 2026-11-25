@@ -1,0 +1,126 @@
+{
+  "basePricePoisha": 25000,
+  "vatRatePercent": 5,
+  "reservationTtlSeconds": 300,
+  "groups": [
+    {
+      "id": "bread",
+      "name": "Bread",
+      "min": 1,
+      "max": 1,
+      "options": [
+        { "id": "toast", "name": "Toast", "pricePoisha": 0, "ingredients": {} },
+        { "id": "paratha", "name": "Paratha", "pricePoisha": 2000, "ingredients": { "paratha": 1 } },
+        { "id": "croissant", "name": "Croissant", "pricePoisha": 5000, "ingredients": { "croissant": 1 } }
+      ]
+    },
+    {
+      "id": "eggs",
+      "name": "Eggs",
+      "min": 2,
+      "max": 6,
+      "step": 2,
+      "options": [
+        { "id": "fried", "name": "Fried", "pricePoisha": 3000, "ingredients": { "egg": 1 } },
+        { "id": "scrambled", "name": "Scrambled", "pricePoisha": 3500, "ingredients": { "egg": 1 } },
+        { "id": "omelette", "name": "Omelette", "pricePoisha": 7000, "ingredients": { "egg": 2 } }
+      ]
+    },
+    {
+      "id": "protein",
+      "name": "Protein",
+      "min": 1,
+      "max": 3,
+      "options": [
+        { "id": "sausage", "name": "Chicken Sausage", "pricePoisha": 6000, "ingredients": { "sausage": 1 } },
+        { "id": "bacon", "name": "Beef Bacon", "pricePoisha": 9000, "ingredients": { "bacon": 1 } },
+        { "id": "tofu", "name": "Tofu", "pricePoisha": 5000, "ingredients": { "tofu": 1 } }
+      ]
+    },
+    {
+      "id": "extras",
+      "name": "Extras",
+      "min": 0,
+      "max": 4,
+      "options": [
+        { "id": "hashbrown", "name": "Hash Brown", "pricePoisha": 4000, "ingredients": { "hashbrown": 1 } },
+        { "id": "mushroom", "name": "Mushroom", "pricePoisha": 3000, "ingredients": { "mushroom": 1 } },
+        { "id": "beans", "name": "Baked Beans", "pricePoisha": 2500, "ingredients": { "beans": 1 } },
+        { "id": "cheese", "name": "Cheese", "pricePoisha": 3500, "ingredients": { "cheese": 1 } }
+      ]
+    },
+    {
+      "id": "sauce",
+      "name": "Sauce",
+      "min": 0,
+      "maxDistinct": 2,
+      "maxPerOption": 1,
+      "options": [
+        { "id": "ketchup", "name": "Ketchup", "pricePoisha": 0, "ingredients": {} },
+        { "id": "hollandaise", "name": "Hollandaise", "pricePoisha": 2500, "ingredients": { "hollandaise": 1 } },
+        { "id": "chili", "name": "Chili", "pricePoisha": 1000, "ingredients": {} }
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "R1",
+      "type": "requires",
+      "optionId": "hollandaise",
+      "requiredAnyOf": ["scrambled", "omelette"],
+      "message": "Hollandaise requires at least one of Scrambled or Omelette"
+    },
+    {
+      "id": "R2",
+      "type": "excludes",
+      "optionId": "tofu",
+      "excludedOptions": ["sausage", "bacon"],
+      "message": "Tofu cannot be combined with Chicken Sausage or Beef Bacon"
+    },
+    {
+      "id": "R3",
+      "type": "overrideLimit",
+      "triggerOptionId": "croissant",
+      "targetGroupId": "extras",
+      "max": 2,
+      "message": "Extras max is 2 when Croissant is selected"
+    },
+    {
+      "id": "R4",
+      "type": "excludes",
+      "optionId": "chili",
+      "excludedOptions": ["hollandaise"],
+      "message": "Chili cannot be combined with Hollandaise"
+    }
+  ],
+  "initialStock": {
+    "egg": 10,
+    "sausage": 4,
+    "bacon": 3,
+    "tofu": 5,
+    "croissant": 2,
+    "paratha": 10,
+    "toast": 20,
+    "hashbrown": 6,
+    "mushroom": 6,
+    "beans": 8,
+    "cheese": 4,
+    "hollandaise": 5
+  },
+  "promos": [
+    {
+      "id": "C1",
+      "type": "threshold_flat",
+      "minSubtotalPoisha": 120000,
+      "discountPoisha": 10000
+    },
+    {
+      "id": "C2",
+      "type": "coupon_percent_cap",
+      "code": "MORNING15",
+      "percent": 15,
+      "maxDiscountPoisha": 15000,
+      "validBeforeHourDhaka": 11
+    }
+  ]
+}
